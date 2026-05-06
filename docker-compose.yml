@@ -1,12 +1,11 @@
 services:
   web:
-    image: registry.gitlab.com/iparish/iparish-fastapi-backend:latest
-    container_name: iparish_web
+    container_name: cron_scheduler_web
     build:
       context: .
       dockerfile: Dockerfile
     ports:
-      - '8000:8000'
+      - "8000:8000"
     restart: unless-stopped
     env_file:
       - .env
@@ -20,11 +19,11 @@ services:
     working_dir: /app
 
   celery_worker:
-    container_name: celery_worker
+    container_name: cron_scheduler_worker
     build:
       context: .
       dockerfile: Dockerfile
-    command: celery -A core.celery_app worker --loglevel=info
+    command: celery -A core.celery_app worker --loglevel=info --concurrency=4
     restart: unless-stopped
     env_file:
       - .env
@@ -38,7 +37,7 @@ services:
     working_dir: /app
 
   celery_beat:
-    container_name: celery_beat
+    container_name: cron_scheduler_beat
     build:
       context: .
       dockerfile: Dockerfile
@@ -55,26 +54,44 @@ services:
       - .:/app
     working_dir: /app
 
+  flower:
+    container_name: cron_scheduler_flower
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A core.celery_app flower --port=5555
+    ports:
+      - "5555:5555"
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    working_dir: /app
+
   redis:
-    container_name: Redis
+    container_name: cron_scheduler_redis
     image: redis:7-alpine
     ports:
-      - '6379:6379'
+      - "6379:6379"
     volumes:
       - redis_data:/data
     restart: unless-stopped
     healthcheck:
-      test: ['CMD-SHELL', 'redis-cli ping || exit 1']
+      test: ["CMD-SHELL", "redis-cli ping || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 30s
 
   db:
-    container_name: DB
+    container_name: cron_scheduler_db
     image: postgres:15
     ports:
-      - '5433:5432'
+      - "5433:5432"
     restart: unless-stopped
     environment:
       POSTGRES_USER: fastapi_user
@@ -83,7 +100,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U fastapi_user -d fastapi_db']
+      test: ["CMD-SHELL", "pg_isready -U fastapi_user -d fastapi_db"]
       interval: 5s
       timeout: 5s
       retries: 5

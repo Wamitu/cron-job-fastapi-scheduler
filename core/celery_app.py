@@ -1,12 +1,11 @@
 import os
-from celery.schedules import crontab
 from celery import Celery
-from datetime import datetime, timedelta
+from celery.schedules import crontab
 
 broker = os.getenv("CELERY_BROKER_URL", "redis://redis:6379/0")
-backend = os.getenv("CELERY_RESULT_BACKEND", broker)
+backend = os.getenv("CELERY_RESULT_BACKEND", "redis://redis:6379/1")
 
-celery_app = Celery("iparish", broker=broker, backend=backend)
+celery_app = Celery("CronJobScheduler", broker=broker, backend=backend)
 celery_app.conf.update(
     imports=["core.tasks"],
     task_serializer="json",
@@ -16,22 +15,9 @@ celery_app.conf.update(
     enable_utc=True,
 )
 
-# celery_app.conf.beat_schedule = {
-#     "update-subscription-statuses-every-minute": {
-#         "task": "core.tasks.update_subscription_statuses",
-#         "schedule": timedelta(minutes=5),  # every 2 minutes
-#         "options": {
-#             "eta": datetime.utcnow() + timedelta(minutes=5)  # start 5 mins later
-#         },
-#     },
-# }
-
 celery_app.conf.beat_schedule = {
-    "update-subscription-statuses-every-day-10am": {
-        "task": "core.tasks.update_subscription_statuses",
-        "schedule": crontab(minute=0, hour=10),  # Runs daily at 10:00 AM
-        "options": {
-            "eta": datetime.utcnow() + timedelta(minutes=5)  # start 5 mins later
-        },
+    "dispatch_scheduled_emails": {
+        "task": "core.tasks.dispatch_scheduled_emails",
+        "schedule": crontab(minute="*"),  # every minute
     },
 }
